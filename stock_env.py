@@ -8,7 +8,7 @@ import talib
 INITIAL_AMOUNT = 1000
 
 class StockEnv:
-    def __init__(self, tickers=None, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, initial_stocks=[8]):
+    def __init__(self, tickers=None, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, initial_stocks=[0]):
         self.df = pd.read_csv('data/coke.csv', header=0)
         self.start_day = 35
         self.day = self.start_day
@@ -170,3 +170,42 @@ class StockEnv:
     
     def _get_all_days(self):
         return self.df['prccd'].shape[0]
+
+    def draw_cumulative_return(self, args, _torch) -> list:
+        state_dim = self.state_dim
+        action_dim = self.action_dim
+
+        agent = args.agent
+        net_dim = args.net_dim
+        cwd = args.cwd
+
+        agent.init(net_dim, state_dim, action_dim)
+        agent.save_or_load_agent(cwd=cwd, if_save=False)
+        act = agent.act
+        device = agent.device
+
+        state = self.reset()
+        episode_returns = list()  # the cumulative_return / initial_account
+        with _torch.no_grad():
+            for i in range(1200, 1300):
+                s_tensor = _torch.as_tensor((state,), device=device).float()
+                a_tensor = act(s_tensor)
+                action = a_tensor.cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
+                state, reward, done, _ = self.step(action)
+
+                _, close, _, _, _, _, _ = self._get_data(self.day)
+
+                total_asset = self.balance + (close * self.stocks[0]).sum()
+                episode_return = total_asset / self.initial_amount
+                episode_returns.append(episode_return)
+                if done:
+                    break
+
+        import matplotlib.pyplot as plt
+        plt.plot(episode_returns)
+        plt.grid()
+        plt.title('cumulative return')
+        plt.xlabel('day')
+        plt.xlabel('multiple of initial_account')
+        plt.savefig(f'{cwd}/cumulative_return.jpg')
+        return episode_returns
