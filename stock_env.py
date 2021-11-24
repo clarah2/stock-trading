@@ -10,6 +10,7 @@ INITIAL_AMOUNT = 1000
 class StockEnv:
     def __init__(self, tickers=None, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, initial_stocks=[0]):
         self.df = pd.read_csv('data/coke.csv', header=0)
+        self.spy = pd.read_csv('data/SPY.csv', header=0)
         self.start_day = 35
         self.day = self.start_day
         self.open_price, self.close_price, self.rsi, self.macd, self.obv, self.cci, self.adx = self._get_data(self.day)
@@ -201,11 +202,16 @@ class StockEnv:
                 if done:
                     break
 
+        spy_data = self.spy['Close'][1200:1300].to_numpy()
+        spy_data = spy_data / spy_data[0]
+                    
         import matplotlib.pyplot as plt
-        plt.plot(episode_returns)
+        plt.plot(episode_returns, 'b')
+        plt.plot(spy_data, 'r')
         plt.grid()
-        plt.title('cumulative return')
-        plt.xlabel('day')
-        plt.xlabel('multiple of initial_account')
+        plt.title('Cumulative return')
+        plt.xlabel('Day index (between 10/8/2010 and 3/2/2011)')
+        plt.ylabel('multiple of initial_account')
+        plt.legend(['RL-PPO', 'SPY'])
         plt.savefig(f'{cwd}/cumulative_return.jpg')
         return episode_returns
