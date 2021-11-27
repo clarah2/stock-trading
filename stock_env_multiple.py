@@ -145,6 +145,13 @@ class StockEnv:
         df['cci'] = talib.CCI(df['prchd'], df['prcld'], df['prccd']) #default period: 14 days
         df['adx'] = talib.ADX(df['prchd'], df['prcld'], df['prccd']) #default period: 14 days
 
+        
+    """
+    Converts a time index between 0 and X to a datetime.
+    """
+    def _convert_time_index_to_date_time(self, index):
+         pass
+        
     """
     Function to get the open price, close price, and technical indicators for given day.
     """
