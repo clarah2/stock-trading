@@ -8,30 +8,30 @@ import matplotlib.pyplot as plt
 INITIAL_AMOUNT = 1e6
 
 class StockEnvMultiple:
-    def __init__(self, tickers=None, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, initial_stocks=None):
+    def __init__(self,  daterange=None, tickers=None, begin_date=None, end_date=None,initial_amount=INITIAL_AMOUNT, initial_stocks=None, reward_scaling=1e-4):
         df_raw = pd.read_csv('data/filtered_with_ti.csv', header=0)
         self.spy = pd.read_csv('data/SPY.csv', header=0)
 
         # Filter dataframe by stocks we want.
         self.df = df_raw[df_raw['tic'].isin(tickers)]
 
-        # Initialize datetime range
-        self._initialize_datetime_range()
-
+        self.daterange = daterange
+        
+        self.env_num = 1
+        
         self.start_day = self.get_index(begin_date)
-        print(self.start_day)
         if self.start_day is None:
             print("Bad start day!")
             return
 
         self.day = self.start_day
-        tics, self.open_price, self.close_price, self.rsi, self.macd, self.obv, self.cci, self.adx = self._get_data(self.day)
+        self.tics, self.open_price, self.close_price, self.rsi, self.macd, self.obv, self.cci, self.adx = self._get_data(self.day)
 
         print(f'Using stocks: {tics}')
 
         self.max_step = self.daterange.shape[0]
         self.max_day = self.get_index(end_date) if self.get_index(end_date) is not None else 10000
-        self.max_stock = 1e2
+        self.max_stock = 100
 
         self.initial_amount = initial_amount
         # Amount of money we have.
@@ -49,26 +49,19 @@ class StockEnvMultiple:
         self.stocks = initial_stocks
 
         # Total assets
-        self.total_assets = sum([x*y for x,y in zip(self.close_price, self.stocks)])
+        self.total_assets = initial_amount + sum([x*y for x,y in zip(self.close_price, self.stocks)])
 
         # Technical Indicators
         # RSI, MACD, OBV, CCI, ADX
-        self.technical_indicators = [self.rsi, self.macd, self.obv, self.cci, self.adx]
+        self.state_vars = ['Open', 'Close', 'rsi', 'macd', 'obv', 'cci', 'adx']
 
         # Stuff needed for identification
         self.env_name = "RLStockEnv-v2"
         self.state_dim = len(self.reset())
         self.action_dim = len(self.stocks)
-        self.target_return = 1e7
         self.if_discrete = False
 
 
-    """
-    Get the datetime range (from AAPL since we know it has the full datetime)
-    """
-    def _initialize_datetime_range(self):
-        aapl = self.df[self.df['tic'] == 'AAPL']
-        self.daterange = aapl['Date'].to_numpy()
 
     """
     Convert date to time index.
@@ -76,7 +69,7 @@ class StockEnvMultiple:
     def get_index(self, date):
         # First convert date to pandas date.
         pd_date = pd.to_datetime(date, infer_datetime_format=True)
-
+        
         # get index in numpy array
         out = np.where(self.daterange == str(pd_date.date()))
 
@@ -114,6 +107,31 @@ class StockEnvMultiple:
 
 
     """
+    Get data and TIs and store them into a dict, given a time index.
+    """
+    def _get_data_dict(self, index):
+        df_day = self.df[self.df['Date'] == self.get_date(index)]
+        return df_day.to_dict(orient='tic')
+
+    
+    """
+    Given a dict from _get_data_dict, build a state vector.
+    """
+    def _build_state(self, data):
+        state = [self.balance, *self.stocks]
+        
+        # Add stocks.
+        for var in self.state_vars:
+            for tic in self.tics:
+                if tic not in data:
+                    state.append(0)
+                else:
+                    state.append(data[tic][var])
+                                 
+        return state
+        
+    
+    """
     Resets the environment to default.
     """
     def reset(self):
@@ -123,8 +141,8 @@ class StockEnvMultiple:
         self.stocks = self.initial_stocks
 
         _, _, close_price, rsi, macd, obv, cci, adx = self._get_data(self.day)
-        self.total_assets = sum([x*y for x,y in zip(close_price, self.stocks)])
-        output = [self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx]
+        self.total_assets = self.balance + sum([x*y for x,y in zip(close_price, self.stocks)])
+        output = np.array([self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx])
         return output
 
 
@@ -132,11 +150,14 @@ class StockEnvMultiple:
     Iterates our current day to the next one.
     """
     def step(self, action):
+        # print('a', action)
         self.day += 1
         tic, open_price, close_price, rsi, macd, obv, cci, adx = self._get_data(self.day)
+        
+ 
 
         action = action * self.max_stock  # actions initially is scaled between 0 to 1
-        action = (action.astype(int))  # convert into integer because we can't by fraction of shares
+        action = np.floor(action.astype(int))  # convert into integer because we can't by fraction of shares
 
         done = False
         if self.day == self.max_day:
@@ -160,10 +181,16 @@ class StockEnvMultiple:
         # compute value of total assets and add difference from yesterday's to rewards
         stocks_value = sum([x*y for x,y in zip(close_price, self.stocks)])
         daily_total_assets = stocks_value + self.balance
+#         print('total', self.total_assets)
+#         print('today', daily_total_assets)
+        
         daily_reward = daily_total_assets - self.total_assets
         self.rewards.append(daily_reward)
-
-        state = [self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx]
+        
+        # Update assets
+        self.total_assets = daily_total_assets
+        
+        state = np.array([self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx])
         return state, daily_reward, done, dict()
 
 
@@ -181,12 +208,14 @@ class StockEnvMultiple:
         device = agent.device
 
         state = self.reset()
+        print(state)
         episode_returns = list()  # the cumulative_return / initial_account
         with _torch.no_grad():
             for i in range(self.start_day, self.max_day):
                 s_tensor = _torch.as_tensor((state,), device=device).float()
                 a_tensor = act(s_tensor)
                 action = a_tensor.cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
+                print(action)
                 state, reward, done, _ = self.step(action)
 
                 _, _, close, _, _, _, _, _ = self._get_data(self.day)
@@ -194,7 +223,10 @@ class StockEnvMultiple:
                 total_asset = self.balance + sum([x*y for x,y in zip(close, self.stocks)])
                 episode_return = total_asset / self.initial_amount
                 episode_returns.append(episode_return)
+                print(self.stocks)
 
+
+        
         spy_data = self.spy['Close'][self.start_day:self.max_day].to_numpy()
         spy_data = spy_data / spy_data[0]
 
@@ -208,4 +240,4 @@ class StockEnvMultiple:
         plt.xlabel(f'Day index (between {start_date} and {end_date})')
         plt.ylabel('multiple of initial_account')
         plt.legend(['RL-PPO', 'SPY'])
-        return episode_returns
+        plt.show()
