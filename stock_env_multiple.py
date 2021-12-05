@@ -104,6 +104,8 @@ class StockEnvMultiple:
         out = self.balance
         for tic in self.stocks:
             if tic in data:
+                if np.isnan(data[tic]['Close']):
+                    continue
                 out += data[tic]['Close'] * self.stocks[tic]
         
         return out
@@ -167,6 +169,9 @@ class StockEnvMultiple:
             if ticker not in day_data:
                 continue
             close_price_idx = day_data[ticker]['Close']
+            print(close_price_idx)
+            if np.isnan(close_price_idx):
+                continue
             self.stocks[ticker] *= np.round(day_data[ticker]['multiplier'])
             if stock_action > 0:
                 # amount of stocks that can be bought with current balance
