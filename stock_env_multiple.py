@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 INITIAL_AMOUNT = 1e6
 
 class StockEnvMultiple:
-    def __init__(self, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT):
+    def __init__(self, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, reward_scaling=1e-6):
         df_raw = pd.read_csv('data/final_filtered.csv', header=0)
         self.spy = pd.read_csv('data/SPY.csv', header=0)
         
@@ -41,6 +41,7 @@ class StockEnvMultiple:
         # Reward state.
         # A list of rewards. The total sum should be the total reward.
         self.rewards = []
+        self.reward_scaling = reward_scaling
 
         # List of stocks.
         # In here should be a balance of each stock.
@@ -104,6 +105,7 @@ class StockEnvMultiple:
         out = self.balance
         for tic in self.stocks:
             if tic in data:
+                
                 if np.isnan(data[tic]['Close']):
                     continue
                 out += data[tic]['Close'] * self.stocks[tic]
@@ -169,7 +171,6 @@ class StockEnvMultiple:
             if ticker not in day_data:
                 continue
             close_price_idx = day_data[ticker]['Close']
-            print(close_price_idx)
             if np.isnan(close_price_idx):
                 continue
             self.stocks[ticker] *= np.round(day_data[ticker]['multiplier'])
@@ -187,7 +188,7 @@ class StockEnvMultiple:
 
         # compute value of total assets and add difference from yesterday's to rewards
         daily_total_assets = self._get_total_assets(day_data)
-        daily_reward = daily_total_assets - self.total_assets
+        daily_reward = self.reward_scaling * (daily_total_assets - self.total_assets)
         self.rewards.append(daily_reward)
         
         # Update assets
