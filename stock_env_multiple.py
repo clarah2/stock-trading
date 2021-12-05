@@ -8,15 +8,15 @@ import matplotlib.pyplot as plt
 INITIAL_AMOUNT = 1e6
 
 class StockEnvMultiple:
-    def __init__(self,  daterange=None, tickers=None, begin_date=None, end_date=None,initial_amount=INITIAL_AMOUNT, initial_stocks=None, reward_scaling=1e-4):
+    def __init__(self,  daterange=None, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT):
         df_raw = pd.read_csv('data/filtered_with_ti.csv', header=0)
         self.spy = pd.read_csv('data/SPY.csv', header=0)
+        
 
         # Filter dataframe by stocks we want.
         self.df = df_raw[df_raw['tic'].isin(tickers)]
 
         self.daterange = daterange
-        
         self.env_num = 1
         
         self.start_day = self.get_index(begin_date)
@@ -25,9 +25,7 @@ class StockEnvMultiple:
             return
 
         self.day = self.start_day
-        self.tics, self.open_price, self.close_price, self.rsi, self.macd, self.obv, self.cci, self.adx = self._get_data(self.day)
-
-        print(f'Using stocks: {tics}')
+        init_data = self._get_data_dict(self.start_day)
 
         self.max_step = self.daterange.shape[0]
         self.max_day = self.get_index(end_date) if self.get_index(end_date) is not None else 10000
@@ -36,6 +34,10 @@ class StockEnvMultiple:
         self.initial_amount = initial_amount
         # Amount of money we have.
         self.balance = initial_amount
+        # Technical Indicators
+        # RSI, MACD, OBV, CCI, ADX
+        self.state_vars = ['Open', 'Close', 'rsi', 'macd', 'obv', 'cci', 'adx']
+        
 
         # Reward state.
         # A list of rewards. The total sum should be the total reward.
@@ -45,18 +47,20 @@ class StockEnvMultiple:
         # In here should be a balance of each stock.
         # For example, say we have 5 stocks of Coke,
         # so this would be [5].
-        self.initial_stocks = initial_stocks
-        self.stocks = initial_stocks
-
+        self.initial_stocks = tickers
+        self.stocks = tickers
+        self.stock_list = list(self.stocks.keys())
+        
+        print(f'Using stocks: {self.stock_list}')
+   
         # Total assets
-        self.total_assets = initial_amount + sum([x*y for x,y in zip(self.close_price, self.stocks)])
+        self.total_assets = self._get_total_assets(init_data)
+        self.state = self.reset()
+        print(self.state)
 
-        # Technical Indicators
-        # RSI, MACD, OBV, CCI, ADX
-        self.state_vars = ['Open', 'Close', 'rsi', 'macd', 'obv', 'cci', 'adx']
 
         # Stuff needed for identification
-        self.env_name = "RLStockEnv-v2"
+        self.env_name = "RLStockEnv-v3"
         self.state_dim = len(self.reset())
         self.action_dim = len(self.stocks)
         self.if_discrete = False
@@ -89,44 +93,42 @@ class StockEnvMultiple:
         return self.daterange[index]
 
     """
-    Get data and technical indicators given a time index.
-    """
-    def _get_data(self, index):
-        # Get state variables
-        df_day = self.df[self.df['Date'] == self.get_date(index)]
-        tics = df_day['tic'].tolist()
-        open_price = df_day['Open'].tolist()
-        close_price = df_day['Close'].tolist()
-        rsi = df_day['rsi'].tolist()
-        macd = df_day['macd'].tolist()
-        obv = df_day['obv'].tolist()
-        cci = df_day['cci'].tolist()
-        adx = df_day['adx'].tolist()
-
-        return [tics, open_price, close_price, rsi, macd, obv, cci, adx]
-
-
-    """
     Get data and TIs and store them into a dict, given a time index.
     """
     def _get_data_dict(self, index):
         df_day = self.df[self.df['Date'] == self.get_date(index)]
-        return df_day.to_dict(orient='tic')
+        return df_day.set_index('tic').to_dict('index')
 
+    """
+    Compute our total number of assets.
+    """
+    def _get_total_assets(self, data):
+        out = self.balance
+        for tic in self.stocks:
+            if tic in data:
+                out += data[tic]['Close'] * self.stocks[tic]
+        
+        return out
     
     """
     Given a dict from _get_data_dict, build a state vector.
     """
     def _build_state(self, data):
-        state = [self.balance, *self.stocks]
+        state = [self.balance]
+        for tic in self.stock_list:
+            state.append(self.stocks[tic])
+
         
         # Add stocks.
         for var in self.state_vars:
-            for tic in self.tics:
+            for tic in self.stock_list:
                 if tic not in data:
                     state.append(0)
                 else:
-                    state.append(data[tic][var])
+                    if np.isnan(data[tic][var]):
+                        state.append(0)
+                    else:
+                        state.append(data[tic][var])
                                  
         return state
         
@@ -140,9 +142,9 @@ class StockEnvMultiple:
         self.rewards = []
         self.stocks = self.initial_stocks
 
-        _, _, close_price, rsi, macd, obv, cci, adx = self._get_data(self.day)
-        self.total_assets = self.balance + sum([x*y for x,y in zip(close_price, self.stocks)])
-        output = np.array([self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx])
+        day_data = self._get_data_dict(self.day)
+        self.total_assets = self._get_total_assets(day_data)
+        output = np.array(self._build_state(day_data))
         return output
 
 
@@ -152,10 +154,8 @@ class StockEnvMultiple:
     def step(self, action):
         # print('a', action)
         self.day += 1
-        tic, open_price, close_price, rsi, macd, obv, cci, adx = self._get_data(self.day)
+        day_data = self._get_data_dict(self.day)
         
- 
-
         action = action * self.max_stock  # actions initially is scaled between 0 to 1
         action = np.floor(action.astype(int))  # convert into integer because we can't by fraction of shares
 
@@ -165,32 +165,31 @@ class StockEnvMultiple:
 
         for i in range(self.action_dim):
             stock_action = action[i]
-            close_price_idx = close_price[i]
+            ticker = self.stock_list[i]
+            if ticker not in day_data:
+                continue
+            close_price_idx = day_data[ticker]['Close']
             if stock_action > 0:
                 # amount of stocks that can be bought with current balance
                 available = self.balance // close_price_idx
                 change_in_stock = min(available, stock_action)
                 self.balance -= close_price_idx * change_in_stock
-                self.stocks[i] += change_in_stock
+                self.stocks[ticker] += change_in_stock
             elif stock_action < 0:
                 # amount of stocks that can be sold
-                change_in_stock = min(self.stocks[i], -stock_action)
+                change_in_stock = min(self.stocks[ticker], -stock_action)
                 self.balance += close_price_idx * change_in_stock
-                self.stocks[i] -= change_in_stock
+                self.stocks[ticker] -= change_in_stock
 
         # compute value of total assets and add difference from yesterday's to rewards
-        stocks_value = sum([x*y for x,y in zip(close_price, self.stocks)])
-        daily_total_assets = stocks_value + self.balance
-#         print('total', self.total_assets)
-#         print('today', daily_total_assets)
-        
+        daily_total_assets = self._get_total_assets(day_data)
         daily_reward = daily_total_assets - self.total_assets
         self.rewards.append(daily_reward)
         
         # Update assets
         self.total_assets = daily_total_assets
         
-        state = np.array([self.balance, *self.stocks, *close_price, *rsi, *macd, *obv, *cci, *adx])
+        state = np.array(self._build_state(day_data))
         return state, daily_reward, done, dict()
 
 
@@ -218,9 +217,9 @@ class StockEnvMultiple:
                 print(action)
                 state, reward, done, _ = self.step(action)
 
-                _, _, close, _, _, _, _, _ = self._get_data(self.day)
+                day_data = self._get_data_dict(self.day)
 
-                total_asset = self.balance + sum([x*y for x,y in zip(close, self.stocks)])
+                total_asset = self._get_total_assets(day_data)
                 episode_return = total_asset / self.initial_amount
                 episode_returns.append(episode_return)
                 print(self.stocks)
