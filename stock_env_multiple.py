@@ -8,15 +8,14 @@ import matplotlib.pyplot as plt
 INITIAL_AMOUNT = 1e6
 
 class StockEnvMultiple:
-    def __init__(self,  daterange=None, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT):
-        df_raw = pd.read_csv('data/filtered_with_ti.csv', header=0)
+    def __init__(self, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT):
+        df_raw = pd.read_csv('data/final_filtered.csv', header=0)
         self.spy = pd.read_csv('data/SPY.csv', header=0)
         
-
         # Filter dataframe by stocks we want.
         self.df = df_raw[df_raw['tic'].isin(tickers)]
 
-        self.daterange = daterange
+        self.daterange = df_raw.loc[df_raw['tic'] == 'AAPL', 'Date'].to_numpy()
         self.env_num = 1
         
         self.start_day = self.get_index(begin_date)
@@ -56,7 +55,6 @@ class StockEnvMultiple:
         # Total assets
         self.total_assets = self._get_total_assets(init_data)
         self.state = self.reset()
-        print(self.state)
 
 
         # Stuff needed for identification
@@ -169,6 +167,7 @@ class StockEnvMultiple:
             if ticker not in day_data:
                 continue
             close_price_idx = day_data[ticker]['Close']
+            self.stocks[ticker] *= np.round(day_data[ticker]['multiplier'])
             if stock_action > 0:
                 # amount of stocks that can be bought with current balance
                 available = self.balance // close_price_idx
@@ -214,7 +213,6 @@ class StockEnvMultiple:
                 s_tensor = _torch.as_tensor((state,), device=device).float()
                 a_tensor = act(s_tensor)
                 action = a_tensor.cpu().numpy()[0]  # not need detach(), because with torch.no_grad() outside
-                print(action)
                 state, reward, done, _ = self.step(action)
 
                 day_data = self._get_data_dict(self.day)
@@ -222,7 +220,6 @@ class StockEnvMultiple:
                 total_asset = self._get_total_assets(day_data)
                 episode_return = total_asset / self.initial_amount
                 episode_returns.append(episode_return)
-                print(self.stocks)
 
 
         
