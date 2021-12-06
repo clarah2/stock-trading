@@ -198,7 +198,7 @@ class StockEnvMultiple:
         return state, daily_reward, done, dict()
 
 
-    def draw_cumulative_return(self, args, _torch) -> list:
+    def draw_cumulative_return(self, args, _torch, model_type='') -> list:
         state_dim = self.state_dim
         action_dim = self.action_dim
 
@@ -241,5 +241,5 @@ class StockEnvMultiple:
         plt.title('Cumulative return')
         plt.xlabel(f'Day index (between {start_date} and {end_date})')
         plt.ylabel('multiple of initial_account')
-        plt.legend(['RL-PPO', 'SPY'])
+        plt.legend(['RL-'+model_type, 'SPY'])
         plt.show()
