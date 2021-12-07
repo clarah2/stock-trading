@@ -198,7 +198,7 @@ class StockEnvMultiple:
         return state, daily_reward, done, dict()
 
 
-    def draw_cumulative_return(self, args, _torch, model_type='') -> list:
+    def draw_cumulative_return(self, args, _torch, model_type='', color='b') -> list:
         state_dim = self.state_dim
         action_dim = self.action_dim
 
@@ -235,8 +235,8 @@ class StockEnvMultiple:
         start_date = self.get_date(self.start_day)
         end_date = self.get_date(self.max_day)
 
-        plt.plot(episode_returns, 'b')
-        plt.plot(spy_data, 'r')
+        plt.plot(episode_returns, color)
+        plt.plot(spy_data, 'black')
         plt.grid()
         plt.title('Cumulative return')
         plt.xlabel(f'Day index (between {start_date} and {end_date})')
