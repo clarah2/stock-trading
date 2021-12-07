@@ -242,4 +242,4 @@ class StockEnvMultiple:
         plt.xlabel(f'Day index (between {start_date} and {end_date})')
         plt.ylabel('multiple of initial_account')
         plt.legend(['RL-'+model_type, 'SPY'])
-        plt.show()
+        return episode_returns, spy_data
