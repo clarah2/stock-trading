@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 INITIAL_AMOUNT = 1e6
 
 class StockEnvMultiple:
-    def __init__(self, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, reward_scaling=1e-6):
-        df_raw = pd.read_csv('data/final_filtered.csv', header=0)
+    def __init__(self, tickers={}, begin_date=None, end_date=None, initial_amount=INITIAL_AMOUNT, reward_scaling=1e-6, ti=True):
+        df_raw = pd.read_csv('data/filtered_with_ti.csv', header=0)
         self.spy = pd.read_csv('data/SPY.csv', header=0)
         
         # Filter dataframe by stocks we want.
@@ -35,7 +35,11 @@ class StockEnvMultiple:
         self.balance = initial_amount
         # Technical Indicators
         # RSI, MACD, OBV, CCI, ADX
-        self.state_vars = ['Open', 'Close', 'rsi', 'macd', 'obv', 'cci', 'adx']
+        # check if technical indicators should be included
+        if (ti):
+            self.state_vars = ['Open', 'Close', 'rsi', 'macd', 'obv', 'cci', 'adx']
+        else:
+            self.state_vars = ['Open', 'Close']
         
 
         # Reward state.
