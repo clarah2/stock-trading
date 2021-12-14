@@ -1,6 +1,8 @@
 # stock-trading
 A deep reinforcement learning approach to stock allocation.
 
+![alt text](https://github.com/clarah2/stock-trading/blob/main/model_comparison.png)
+
 ## Usage
 Install the ElegantRL framework. https://github.com/AI4Finance-Foundation/ElegantRL, Python 3.6+, and PyTorch 1.6+ 
 
