@@ -4,7 +4,7 @@ A deep reinforcement learning approach to stock allocation.
 ![alt text](https://github.com/clarah2/stock-trading/blob/main/model_comparison.png)
 
 ## Usage
-Install the ElegantRL framework. https://github.com/AI4Finance-Foundation/ElegantRL, Python 3.6+, and PyTorch 1.6+ 
+Install the ElegantRL framework. https://github.com/AI4Finance-Foundation/ElegantRL, Python 3.6+, and PyTorch 1.6+, pandas, numpy, and matplotlib (any version) 
 
 ## stock_env_multiple.py
 This script defines our environment.
@@ -50,4 +50,6 @@ Training and evaluating the agent
 
 #### Cell 12
 Backtesting and drawing the graph
+
+All other ipynb's are variants of this one for specific models or parameters.
 
